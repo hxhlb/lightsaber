@@ -9213,6 +9213,13 @@ function start() {
 			// (which runs as root with no sandbox) for the actual xattr ops.
 			let alMem = launchdTask.mem();
 
+			// Pre-zero the xattr value buffer once (3 null bytes at alMem+0x300)
+			// and write the xattr name once (reused for every app)
+			let xattrRemote = alMem + 0x200n;
+			launchdTask.writeStr(xattrRemote, XATTR_NAME);
+			let valRemote = alMem + 0x300n;
+			launchdTask.call(10, "memset", valRemote, 0n, 3n);
+
 			LOG("[APPLIMIT] Scanning " + BUNDLE_BASE + "...");
 			let uuidDir = ALNative.callSymbol("opendir", BUNDLE_BASE);
 			if (!uuidDir) throw "opendir failed for " + BUNDLE_BASE;
@@ -9255,11 +9262,12 @@ function start() {
 					let appPath = uuidPath + appName;
 					scanned++;
 
-					// Check if sideloaded via launchdTask (root, no tokens needed)
-					let provPathRemote = alMem + 0x400n;
-					launchdTask.writeStr(provPathRemote, appPath + "/embedded.mobileprovision");
-					let hasProvision = launchdTask.call(10, "access", provPathRemote, 0n);
-					if (hasProvision !== 0n && hasProvision !== 0) {
+					// Check if sideloaded locally (we have sandbox tokens for
+					// the bundle dir). Only use launchdTask for the actual
+					// setxattr to minimize kernel RPC calls.
+					let provPath = appPath + "/embedded.mobileprovision";
+					let hasProvision = ALNative.callSymbol("access", provPath, 0);
+					if (hasProvision !== 0) {
 						skipped++;
 						continue;
 					}
@@ -9268,10 +9276,6 @@ function start() {
 					// 3 null bytes - undersized value makes installd skip the app
 					let pathRemote = alMem;
 					launchdTask.writeStr(pathRemote, appPath);
-					let xattrRemote = alMem + 0x200n;
-					launchdTask.writeStr(xattrRemote, XATTR_NAME);
-					let valRemote = alMem + 0x300n;
-					launchdTask.call(10, "memset", valRemote, 0n, 3n);
 					let ret = launchdTask.call(100, "setxattr", pathRemote, xattrRemote, valRemote, 3n, 0n, 0n);
 					if (ret === 0n || ret === 0) {
 						LOG("[APPLIMIT] SET xattr on " + appName);
