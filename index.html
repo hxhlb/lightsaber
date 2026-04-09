@@ -205,6 +205,19 @@
       border-color: var(--accent-hover);
       box-shadow: 0 2px 4px rgba(10,15,28,0.08), 0 14px 30px -8px rgba(45,169,255,0.65);
     }
+    .btn-clear-queue {
+      background: none;
+      border: none;
+      color: var(--subtle);
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 8px 14px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      margin-top: 6px;
+    }
+    .btn-clear-queue:active { opacity: 0.5; }
     .btn-disabled {
       background: var(--card-inset);
       color: var(--faint);
@@ -1217,6 +1230,7 @@
 
       <div class="install-zone">
         <button id="runBtn" class="btn btn-run" onclick="confirmInstall()">Install Queue</button>
+        <button type="button" class="btn-clear-queue" id="clearQueueBtn">Clear queue</button>
       </div>
       <div id="installStatus" class="install-status"></div>
       <div class="tip">
@@ -1561,6 +1575,18 @@
     }
     document.getElementById('tweakSheetBack').addEventListener('click', closeTweakSheet);
     document.getElementById('tweakSheetBackdrop').addEventListener('click', closeTweakSheet);
+
+    // Clear all queued tweaks
+    document.getElementById('clearQueueBtn').addEventListener('click', function() {
+      for (var ci = 0; ci < tweakRows.length; ci++) {
+        var cb = document.getElementById(tweakRows[ci].cbId);
+        if (cb && cb.checked) {
+          cb.checked = false;
+          cb.dispatchEvent(new Event('change'));
+        }
+        syncTweakRow(tweakRows[ci]);
+      }
+    });
 
     for (var ti = 0; ti < tweakRows.length; ti++) {
       (function(row) {
