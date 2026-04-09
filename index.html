@@ -585,6 +585,15 @@
       gap: 12px;
       margin: 16px 0 10px;
     }
+    .tweak-section-label {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: var(--faint);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 12px 4px 4px;
+    }
     .tweak-row {
       background: var(--card);
       border: 1px solid var(--border);
@@ -1081,6 +1090,7 @@
       <p id="supportMsg" style="font-size:13px;margin-bottom:6px"></p>
 
       <div class="tweak-list">
+        <div class="tweak-section-label">SpringBoard</div>
         <div class="tweak-row" id="tweakRowFiveicon">
           <div class="tweak-row-head">
             <span class="tweak-row-name">SBCustomizer<span class="tweak-row-hint">tap for options</span></span>
@@ -1138,29 +1148,7 @@
           </div>
         </div>
 
-        <div class="tweak-row" id="tweakRowPowercuff">
-          <div class="tweak-row-head">
-            <span class="tweak-row-name">Powercuff<span class="tweak-row-hint">tap for options</span></span>
-            <button type="button" class="tweak-row-info" aria-label="Powercuff details" data-sheet="tweakRowPowercuff">i</button>
-            <input type="checkbox" id="tweakPowercuff" class="tweak-toggle">
-            <button type="button" class="tweak-queue-btn" data-cb="tweakPowercuff">GET</button>
-          </div>
-          <div class="tweak-row-detail" id="tweakDetailPowercuff" hidden>
-            <div class="tweak-row-desc">Underclocks the CPU/GPU for longer battery, at the cost of speed. Port of <a href="https://github.com/rpetrich/Powercuff">rpetrich's Powercuff</a>. Lasts until reboot.</div>
-          </div>
-          <div class="tweak-row-options">
-            <div class="tweak-row-desc tweak-row-desc-inline">Underclocks the CPU/GPU for longer battery, at the cost of speed. Port of <a href="https://github.com/rpetrich/Powercuff">rpetrich's Powercuff</a>. Lasts until reboot.</div>
-            <span class="tweak-row-options-label">Level</span>
-            <select id="powercuffLevel">
-              <option value="off">Off</option>
-              <option value="nominal" selected>Nominal</option>
-              <option value="light">Light</option>
-              <option value="moderate">Moderate</option>
-              <option value="heavy">Heavy</option>
-            </select>
-          </div>
-        </div>
-
+        <div class="tweak-section-label">System</div>
         <div class="tweak-row" id="tweakRowThreeapp">
           <div class="tweak-row-head">
             <span class="tweak-row-name">MobileGestalt Patcher<span class="tweak-row-hint">tap for options</span></span>
@@ -1209,6 +1197,28 @@
           <div class="tweak-row-options">
             <div class="tweak-row-desc tweak-row-desc-inline">Removes the 3-app sideloading limit for free developer accounts by clearing the installd tracking xattr on all sideloaded app bundles. Must be re-run after installing new sideloaded apps.</div>
             <div class="tweak-row-notes"><strong>Note:</strong> Only affects apps signed with a free provisioning profile. Does not modify any system files &mdash; changes persist until installd re-stamps the apps (next sideload install). Still limited to 10 App IDs per Apple ID per 7-day window.</div>
+          </div>
+        </div>
+
+        <div class="tweak-row" id="tweakRowPowercuff">
+          <div class="tweak-row-head">
+            <span class="tweak-row-name">Powercuff<span class="tweak-row-hint">tap for options</span></span>
+            <input type="checkbox" id="tweakPowercuff" class="tweak-toggle">
+            <button type="button" class="tweak-queue-btn" data-cb="tweakPowercuff">GET</button>
+          </div>
+          <div class="tweak-row-detail" id="tweakDetailPowercuff" hidden>
+            <div class="tweak-row-desc">Underclocks the CPU/GPU for longer battery, at the cost of speed. Port of <a href="https://github.com/rpetrich/Powercuff">rpetrich's Powercuff</a>. Lasts until reboot.</div>
+          </div>
+          <div class="tweak-row-options">
+            <div class="tweak-row-desc tweak-row-desc-inline">Underclocks the CPU/GPU for longer battery, at the cost of speed. Port of <a href="https://github.com/rpetrich/Powercuff">rpetrich's Powercuff</a>. Lasts until reboot.</div>
+            <span class="tweak-row-options-label">Level</span>
+            <select id="powercuffLevel">
+              <option value="off">Off</option>
+              <option value="nominal" selected>Nominal</option>
+              <option value="light">Light</option>
+              <option value="moderate">Moderate</option>
+              <option value="heavy">Heavy</option>
+            </select>
           </div>
         </div>
 
