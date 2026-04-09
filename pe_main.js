@@ -9041,26 +9041,36 @@ function start() {
 			let enableFlags = MG_FLAGS.split(',').filter(function(f) { return f.length > 0; });
 			LOG("[MG] enable=" + (enableFlags.length > 0 ? enableFlags.join(',') : '(none)'));
 
+			let mgModified = false;
+
+			// 4a. Full reset: remove every patchable key from CacheExtra.
+			// We can't track which subset was previously patched, so strip
+			// all of them. MobileGestalt re-queries from real hardware.
+			// (Truncating the plist doesn't work live -- the MG daemon has
+			// the cache in memory and rewrites it on shutdown.)
 			if (enableFlags.length === 0) {
-				// Full reset: truncate the plist to 0 bytes so iOS
-				// regenerates the entire cache from hardware on reboot.
-				// This is the same approach Nugget uses for its reset.
-				MGNative.callSymbol("CFRelease", plist);
-				MGNative.callSymbol("free", errorPtr);
-				LOG("[MG] No flags enabled -- full reset, truncating plist");
-				let fdTrunc = MGNative.callSymbol("open", GESTALT_PATH, 0x0201n, 0o644n); // O_WRONLY|O_TRUNC
-				LOG("[MG] open(WR|TRUNC) fd=" + fdTrunc + " errno=" + mgGetErrno());
-				if (fdTrunc && Number(fdTrunc) >= 0) {
-					MGNative.callSymbol("fsync", fdTrunc);
-					MGNative.callSymbol("close", fdTrunc);
-					LOG("[MG] Plist truncated to 0 bytes. Respring/reboot to regenerate.");
-				} else {
-					throw "cannot truncate plist fd=" + fdTrunc + " errno=" + mgGetErrno();
+				LOG("[MG] No flags enabled -- removing all patchable keys from CacheExtra");
+				let allFlagNames = Object.keys(MG_KEY_MAP);
+				let removed = 0;
+				for (let ri = 0; ri < allFlagNames.length; ri++) {
+					let rkeys = MG_KEY_MAP[allFlagNames[ri]][0];
+					for (let rki = 0; rki < rkeys.length; rki++) {
+						let cfRK = MGNative.callSymbol("CFStringCreateWithCString", 0n, rkeys[rki], 0x08000100n);
+						if (MGNative.callSymbol("CFDictionaryContainsKey", cacheExtra, cfRK)) {
+							MGNative.callSymbol("CFDictionaryRemoveValue", cacheExtra, cfRK);
+							LOG("[MG] REMOVE " + rkeys[rki]);
+							removed++;
+						}
+						MGNative.callSymbol("CFRelease", cfRK);
+					}
 				}
-			} else {
-				// Selective patch: set only the checked keys in CacheExtra,
-				// leave everything else in the plist untouched.
-				let mgModified = false;
+				if (removed > 0) mgModified = true;
+				LOG("[MG] removed " + removed + " keys from CacheExtra");
+			}
+
+			// 4b. Selective patch: set only the checked keys in CacheExtra,
+			// leave everything else in the plist untouched.
+			if (enableFlags.length > 0) {
 				let valBuf = MGNative.callSymbol("calloc", 1n, 8n);
 				let oneBytes = new ArrayBuffer(8);
 				new DataView(oneBytes).setBigInt64(0, 1n, true);
@@ -9107,13 +9117,14 @@ function start() {
 					}
 				}
 				if (cfOne) MGNative.callSymbol("CFRelease", cfOne);
+			}
 
-				if (!mgModified) {
-					LOG("[MG] no changes made, skipping plist write");
-					MGNative.callSymbol("CFRelease", plist);
-					MGNative.callSymbol("free", errorPtr);
-				} else {
-				// 5. Serialize back to binary plist
+			// 5. Write back if anything changed
+			if (!mgModified) {
+				LOG("[MG] no changes made, skipping plist write");
+				MGNative.callSymbol("CFRelease", plist);
+				MGNative.callSymbol("free", errorPtr);
+			} else {
 				// kCFPropertyListBinaryFormat_v1_0 = 200
 				let outData = MGNative.callSymbol("CFPropertyListCreateData", 0n, plist, 200n, 0n, errorPtr);
 				MGNative.callSymbol("CFRelease", plist);
@@ -9124,7 +9135,6 @@ function start() {
 				let outLen = Number(MGNative.callSymbol("CFDataGetLength", outData));
 				LOG("[MG] serialized: " + outLen + " bytes (original was " + fileSize + ")");
 
-				// 6. Write back to file (truncate + write)
 				// O_WRONLY | O_TRUNC = 0x0201
 				let fdOut = MGNative.callSymbol("open", GESTALT_PATH, 0x0201n, 0o644n);
 				LOG("[MG] open(WR|TRUNC) fd=" + fdOut + " errno=" + mgGetErrno());
@@ -9149,7 +9159,7 @@ function start() {
 				MGNative.callSymbol("CFRelease", outData);
 				LOG("[MG] wrote " + totalWritten + "/" + outLen + " bytes");
 
-				// 7. VERIFY: re-read and confirm enabled keys present
+				// VERIFY
 				LOG("[MG] === VERIFICATION ===");
 				let vfd = MGNative.callSymbol("open", GESTALT_PATH, 0n);
 				if (vfd && Number(vfd) >= 0) {
@@ -9169,12 +9179,12 @@ function start() {
 							let vce = MGNative.callSymbol("CFDictionaryGetValue", vplist, vceKey);
 							MGNative.callSymbol("CFRelease", vceKey);
 							if (vce) {
-								for (let vi = 0; vi < enableFlags.length; vi++) {
-									let ve = MG_KEY_MAP[enableFlags[vi]];
-									if (!ve) continue;
+								let allKeys = Object.keys(MG_KEY_MAP);
+								for (let vi = 0; vi < allKeys.length; vi++) {
+									let ve = MG_KEY_MAP[allKeys[vi]];
 									let vk = MGNative.callSymbol("CFStringCreateWithCString", 0n, ve[0][0], 0x08000100n);
 									let vv = MGNative.callSymbol("CFDictionaryGetValue", vce, vk);
-									LOG("[MG] VERIFY " + enableFlags[vi] + "=" + (vv ? "PRESENT" : "MISSING"));
+									LOG("[MG] VERIFY " + allKeys[vi] + "=" + (vv ? "PRESENT" : "ABSENT"));
 									MGNative.callSymbol("CFRelease", vk);
 								}
 							}
@@ -9184,7 +9194,6 @@ function start() {
 					}
 					MGNative.callSymbol("free", vbuf);
 				}
-				} // end if mgModified
 			}
 
 		} catch (mgErr) {
