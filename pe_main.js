@@ -9043,23 +9043,17 @@ function start() {
 
 			// Build list of all keys to process
 			let allKeys = [];
-			if (THREEAPP_MODE === 'revert') {
-				// Revert ALL known keys
-				for (let flag in MG_KEY_MAP) {
-					let keys = MG_KEY_MAP[flag][0];
-					for (let ki = 0; ki < keys.length; ki++) allKeys.push(keys[ki]);
-				}
-			} else {
-				// Only process selected flags
-				for (let fi = 0; fi < activeFlags.length; fi++) {
-					let entry = MG_KEY_MAP[activeFlags[fi]];
-					if (!entry) { LOG("[MG] unknown flag: " + activeFlags[fi]); continue; }
-					let keys = entry[0];
-					for (let ki = 0; ki < keys.length; ki++) allKeys.push(keys[ki]);
-				}
+			// Both enable and revert use the selected flags only.
+			// Revert will only remove keys the user explicitly checked,
+			// never keys that were already in the plist before us.
+			for (let fi = 0; fi < activeFlags.length; fi++) {
+				let entry = MG_KEY_MAP[activeFlags[fi]];
+				if (!entry) { LOG("[MG] unknown flag: " + activeFlags[fi]); continue; }
+				let keys = entry[0];
+				for (let ki = 0; ki < keys.length; ki++) allKeys.push(keys[ki]);
 			}
 
-			if (allKeys.length === 0 && THREEAPP_MODE !== 'revert') {
+			if (allKeys.length === 0) {
 				LOG("[MG] no flags selected, skipping plist modification");
 			} else {
 				// Create CFNumber(1) for integer-valued keys (null in revert mode)
