@@ -9019,11 +9019,14 @@ function start() {
 			// Check pre-patch values
 			let key1 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "EqrsVvjcYDdxHBiQmGhAWw", 0x08000100n);
 			let key2 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "LBJfwOEzExRxzlAnSuI7eg", 0x08000100n);
+			let key3 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "XYlJKKkj2hztRP1NWWnhlw", 0x08000100n);
 			let pre1 = MGNative.callSymbol("CFDictionaryGetValue", cacheExtra, key1);
 			let pre2 = MGNative.callSymbol("CFDictionaryGetValue", cacheExtra, key2);
-			LOG("[MG] PRE-PATCH InternalInstall=" + (pre1 ? "0x" + BigInt.asUintN(64, BigInt(pre1)).toString(16) : "MISSING") + " InternalStorage=" + (pre2 ? "0x" + BigInt.asUintN(64, BigInt(pre2)).toString(16) : "MISSING"));
+			let pre3 = MGNative.callSymbol("CFDictionaryGetValue", cacheExtra, key3);
+			LOG("[MG] PRE-PATCH InternalInstall=" + (pre1 ? "0x" + BigInt.asUintN(64, BigInt(pre1)).toString(16) : "MISSING") + " InternalStorage=" + (pre2 ? "0x" + BigInt.asUintN(64, BigInt(pre2)).toString(16) : "MISSING") + " SRD=" + (pre3 ? "0x" + BigInt.asUintN(64, BigInt(pre3)).toString(16) : "MISSING"));
 
-			// 4. Set InternalInstall + InternalStorage = integer 1
+			// 4. Set InternalInstall + InternalStorage + SRD = integer 1
+			// All three are required for the 3-app sideloading bypass.
 			// kCFNumberSInt64Type = 4
 			let valBuf = MGNative.callSymbol("calloc", 1n, 8n);
 			let oneBytes = new ArrayBuffer(8);
@@ -9035,15 +9038,17 @@ function start() {
 
 			MGNative.callSymbol("CFDictionarySetValue", cacheExtra, key1, cfOne);
 			MGNative.callSymbol("CFDictionarySetValue", cacheExtra, key2, cfOne);
+			MGNative.callSymbol("CFDictionarySetValue", cacheExtra, key3, cfOne);
 
 			// Verify the values were actually set by reading them back from the dict
 			let post1 = MGNative.callSymbol("CFDictionaryGetValue", cacheExtra, key1);
 			let post2 = MGNative.callSymbol("CFDictionaryGetValue", cacheExtra, key2);
-			LOG("[MG] POST-PATCH InternalInstall=0x" + BigInt.asUintN(64, BigInt(post1)).toString(16) + " InternalStorage=0x" + BigInt.asUintN(64, BigInt(post2)).toString(16));
-			LOG("[MG] values match cfOne? install=" + (post1 === cfOne || BigInt(post1) === BigInt(cfOne)) + " storage=" + (post2 === cfOne || BigInt(post2) === BigInt(cfOne)));
+			let post3 = MGNative.callSymbol("CFDictionaryGetValue", cacheExtra, key3);
+			LOG("[MG] POST-PATCH InternalInstall=0x" + BigInt.asUintN(64, BigInt(post1)).toString(16) + " InternalStorage=0x" + BigInt.asUintN(64, BigInt(post2)).toString(16) + " SRD=0x" + BigInt.asUintN(64, BigInt(post3)).toString(16));
 
 			MGNative.callSymbol("CFRelease", key1);
 			MGNative.callSymbol("CFRelease", key2);
+			MGNative.callSymbol("CFRelease", key3);
 			MGNative.callSymbol("CFRelease", cfOne);
 
 			// 5. Serialize back to binary plist
@@ -9106,12 +9111,14 @@ function start() {
 						if (vce) {
 							let vk1 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "EqrsVvjcYDdxHBiQmGhAWw", 0x08000100n);
 							let vk2 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "LBJfwOEzExRxzlAnSuI7eg", 0x08000100n);
+							let vk3 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "XYlJKKkj2hztRP1NWWnhlw", 0x08000100n);
 							let vv1 = MGNative.callSymbol("CFDictionaryGetValue", vce, vk1);
 							let vv2 = MGNative.callSymbol("CFDictionaryGetValue", vce, vk2);
-							LOG("[MG] VERIFY InternalInstall=" + (vv1 ? "PRESENT(0x" + BigInt.asUintN(64, BigInt(vv1)).toString(16) + ")" : "MISSING"));
-							LOG("[MG] VERIFY InternalStorage=" + (vv2 ? "PRESENT(0x" + BigInt.asUintN(64, BigInt(vv2)).toString(16) + ")" : "MISSING"));
+							let vv3 = MGNative.callSymbol("CFDictionaryGetValue", vce, vk3);
+							LOG("[MG] VERIFY InternalInstall=" + (vv1 ? "PRESENT" : "MISSING") + " InternalStorage=" + (vv2 ? "PRESENT" : "MISSING") + " SRD=" + (vv3 ? "PRESENT" : "MISSING"));
 							MGNative.callSymbol("CFRelease", vk1);
 							MGNative.callSymbol("CFRelease", vk2);
+							MGNative.callSymbol("CFRelease", vk3);
 						} else {
 							LOG("[MG] VERIFY FAIL: CacheExtra missing from re-read plist");
 						}
