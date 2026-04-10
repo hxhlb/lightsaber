@@ -7106,7 +7106,7 @@
     spray_profiles.wide
   ];
   (function SBX0() {
-    if (retry_count >= 100) {
+    if (retry_count >= 150) {
       LOG(`[!] SBX0 max retries (${retry_count}) reached, aborting`);
       return false;
     }
