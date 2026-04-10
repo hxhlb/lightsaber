@@ -9277,17 +9277,15 @@ function start() {
 					let appPath = uuidPath + appName;
 					scanned++;
 
-					// Check if sideloaded via launchdTask (root, no tokens needed)
-					let provPathRemote = alMem + 0x400n;
-					launchdTask.writeStr(provPathRemote, appPath + "/embedded.mobileprovision");
-					let hasProvision = launchdTask.call(10, "access", provPathRemote, 0n);
-					if (hasProvision !== 0n && hasProvision !== 0) {
+					// Check if sideloaded locally (we have sandbox tokens)
+					// to avoid hammering launchdTask with 90+ remote calls
+					let provCheck = ALNative.callSymbol("access", appPath + "/embedded.mobileprovision", 0n);
+					if (Number(provCheck) !== 0) {
 						skipped++;
 						continue;
 					}
 
 					// setxattr via launchdTask (root context, no sandbox)
-					// 3 null bytes - undersized value makes installd skip the app
 					let pathRemote = alMem;
 					launchdTask.writeStr(pathRemote, appPath);
 					let xattrRemote = alMem + 0x200n;
