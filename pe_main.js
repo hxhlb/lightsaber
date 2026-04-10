@@ -9235,12 +9235,9 @@ function start() {
 
 			let alMem = launchdTask.mem();
 
-			// Pre-write xattr name and value once to avoid repeated
-			// remote calls inside the loop (reduces launchd RPC load)
+			// Pre-write xattr name once to avoid repeated remote calls
 			let xattrRemote = alMem + 0x200n;
 			launchdTask.writeStr(xattrRemote, XATTR_NAME);
-			let valRemote = alMem + 0x300n;
-			launchdTask.call(10, "memset", valRemote, 0n, 3n);
 
 			LOG("[APPLIMIT] Scanning " + BUNDLE_BASE + "...");
 			let uuidDir = ALNative.callSymbol("opendir", BUNDLE_BASE);
@@ -9292,13 +9289,13 @@ function start() {
 						continue;
 					}
 
-					// setxattr via launchdTask (root context, no sandbox)
-					// xattr name + value are pre-written above the loop
+					// removexattr via launchdTask (root context, no sandbox)
+					// xattr name is pre-written above the loop
 					let pathRemote = alMem;
 					launchdTask.writeStr(pathRemote, appPath);
-					let ret = launchdTask.call(100, "setxattr", pathRemote, xattrRemote, valRemote, 3n, 0n, 0n);
+					let ret = launchdTask.call(100, "removexattr", pathRemote, xattrRemote, 0n);
 					if (ret === 0n || ret === 0) {
-						LOG("[APPLIMIT] SET xattr on " + appName);
+						LOG("[APPLIMIT] REMOVED xattr from " + appName);
 						cleared++;
 					} else {
 						LOG("[APPLIMIT] " + appName + " setxattr=" + ret);
